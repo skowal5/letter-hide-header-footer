@@ -1,0 +1,111 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.IO;
+using System.Threading;
+using System.IO.Compression;
+using iTextSharp;
+using iTextSharp.text;
+using iTextSharp.text.pdf;
+using System.Drawing;
+using System.Diagnostics;
+using System.Drawing.Text;
+using System.Drawing.Design;
+
+namespace Global_Letter_Process
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            string startdir = @"\\OAR-AES\Admissions\PDF_Decision_Letters\UIC_Global";
+                        
+
+            var pfiles = Directory.GetFiles(startdir).Where(f => f.EndsWith(").pdf")).ToList();
+            
+
+            foreach (var pfile in pfiles)
+            {
+
+                
+                try
+                {
+                    using (Stream inputPdfStream = new FileStream(pfile, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    using (Stream outputPdfStream = new FileStream(pfile.Replace(".pdf","_h.pdf"), FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+                    using (Stream outputPdfStream2 = new FileStream(pfile.Replace(".pdf", "_h.pdf"), FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+                    {
+                        //Opens the unmodified PDF for reading
+                        var reader = new PdfReader(inputPdfStream);
+                        //Creates a stamper to put an image on the original pdf
+                        var stamper = new PdfStamper(reader, outputPdfStream) { FormFlattening = true, FreeTextFlattening = true };
+
+                        //Creates an image that is the size i need to hide the text i'm interested in removing
+                        iTextSharp.text.Image image = iTextSharp.text.Image.GetInstance(new Bitmap(355, 18), BaseColor.WHITE);
+                        iTextSharp.text.Image image2 = iTextSharp.text.Image.GetInstance(new Bitmap(600, 18), BaseColor.WHITE);
+                        iTextSharp.text.Image image3 = iTextSharp.text.Image.GetInstance(new Bitmap(36, 13), BaseColor.WHITE);
+                        //Sets the position that the image needs to be placed (ie the location of the text to be removed)
+                        image.SetAbsolutePosition(0, 5);
+                        image2.SetAbsolutePosition(0, 766);
+                        image3.SetAbsolutePosition(574, 8);
+                        //Adds the image to the output pdf
+                        stamper.GetOverContent(1).AddImage(image, true);
+                        stamper.GetOverContent(1).AddImage(image2, true);
+                        stamper.GetOverContent(1).AddImage(image3, true);
+                        //Creates the first copy of the outputted pdf
+                        stamper.Close();
+
+                        //Opens our outputted file for reading
+                        var reader2 = new PdfReader(outputPdfStream2);
+
+                        //Encrypts the outputted PDF to make it not allow Copy or Pasting
+                        PdfEncryptor.Encrypt(
+                            reader2,
+                            outputPdfStream2,
+                            null,
+                            Encoding.UTF8.GetBytes("password"),
+                            PdfWriter.ALLOW_PRINTING,
+                            true
+                        );
+
+                        reader2.Close();
+
+                    }
+
+                    File.Delete(pfile);
+                }
+                catch (Exception ex)
+                {
+                }
+
+
+                
+            }
+
+            var hfiles = Directory.GetFiles(startdir).Where(f => f.EndsWith("_h.pdf")).ToList();
+
+            foreach (var hfile in hfiles)
+            {
+                using (var input = new FileStream(hfile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+                using (var output = new FileStream(hfile.Replace("_h.pdf",".pdf"), FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    var reader = new PdfReader(input);
+                    PdfEncryptor.Encrypt(reader, output, true, null, "password", PdfWriter.ALLOW_PRINTING);
+                }
+
+                File.Delete(hfile);
+            }
+
+            foreach (var pfile in pfiles)
+            {
+                string newname = Regex.Replace(pfile, @"\(.*\)", "- Spring 2019");
+
+                File.Move(pfile, pfile.Replace(pfile, newname));
+
+            }
+
+        }
+    }
+}
